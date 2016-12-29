@@ -51,10 +51,10 @@ const (
 	DynamoDBLockPrefix = "_"
 )
 
-// DynamoDBRecord is the representation of a vault entry in
+// dbRecord is the representation of a vault entry in
 // DynamoDB. The vault key is split up into two components
 // (Path and Key) in order to allow more efficient listings.
-type DynamoDBRecord struct {
+type dbRecord struct {
 	Path  string
 	Key   string
 	Value []byte
@@ -129,7 +129,7 @@ func New(endpoints []string, options *store.Config) (store.Store, error) {
 //Put the key, value pair
 func (d *DynamoDB) Put(key string, value []byte, opts *store.WriteOptions) error {
 	defer metrics.MeasureSince([]string{"dynamodb", "put"}, time.Now())
-	record := DynamoDBRecord{
+	record := dbRecord{
 		Path:  recordPathForVaultKey(key),
 		Key:   recordKeyForVaultKey(key),
 		Value: value,
@@ -146,7 +146,7 @@ func (d *DynamoDB) Put(key string, value []byte, opts *store.WriteOptions) error
 	}}
 
 	for _, prefix := range prefixes(key) {
-		record = DynamoDBRecord{
+		record = dbRecord{
 			Path: recordPathForVaultKey(prefix),
 			Key:  fmt.Sprintf("%s/", recordKeyForVaultKey(prefix)),
 		}
@@ -185,7 +185,7 @@ func (d *DynamoDB) Get(key string) (*store.KVPair, error) {
 		return nil, store.ErrKeyNotFound
 	}
 
-	record := &DynamoDBRecord{}
+	record := &dbRecord{}
 	if err := dynamodbattribute.ConvertFromMap(resp.Item, record); err != nil {
 		return nil, err
 	}
@@ -303,7 +303,7 @@ func (d *DynamoDB) List(prefix string) ([]*store.KVPair, error) {
 	kv := []*store.KVPair{}
 
 	err := d.client.QueryPages(queryInput, func(out *dynamodb.QueryOutput, lastPage bool) bool {
-		var record DynamoDBRecord
+		var record dbRecord
 		for _, item := range out.Items {
 			dynamodbattribute.ConvertFromMap(item, &record)
 			if !strings.HasPrefix(record.Key, DynamoDBLockPrefix) {
@@ -393,7 +393,7 @@ func (d *DynamoDB) AtomicPut(key string, value []byte, previous *store.KVPair, o
 		return false, nil, err
 	}
 
-	record := &DynamoDBRecord{}
+	record := &dbRecord{}
 	if err := dynamodbattribute.ConvertFromMap(resp.Attributes, record); err != nil {
 		return true, nil, err
 	}
@@ -490,7 +490,7 @@ func ensureTableExists(client *dynamodb.DynamoDB, table string, readCapacity, wr
 }
 
 // recordPathForVaultKey transforms a vault key into
-// a value suitable for the `DynamoDBRecord`'s `Path`
+// a value suitable for the `dbRecord`'s `Path`
 // property. This path equals the the vault key without
 // its last component.
 func recordPathForVaultKey(key string) string {
@@ -501,7 +501,7 @@ func recordPathForVaultKey(key string) string {
 }
 
 // recordKeyForVaultKey transforms a vault key into
-// a value suitable for the `DynamoDBRecord`'s `Key`
+// a value suitable for the `dbRecord`'s `Key`
 // property. This path equals the the vault key's
 // last component.
 func recordKeyForVaultKey(key string) string {
@@ -511,7 +511,7 @@ func recordKeyForVaultKey(key string) string {
 // vaultKey returns the vault key for a given record
 // from the DynamoDB table. This is the combination of
 // the records Path and Key.
-func vaultKey(record *DynamoDBRecord) string {
+func vaultKey(record *dbRecord) string {
 	path := unescapeEmptyPath(record.Path)
 	if path == "" {
 		return record.Key
