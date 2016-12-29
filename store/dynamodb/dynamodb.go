@@ -22,11 +22,11 @@ import (
 )
 
 var (
-	// ErrMultipleEndpointsUnsupported is thrown when multiple endpoints specified for
-	// BoltDB. Endpoint has to be a local file path
+	// ErrMultipleEndpointsUnsupported is thrown when multiple endpoints specified for dynamodb
 	ErrMultipleEndpointsUnsupported = errors.New("dynamodb does not support multiple endpoints")
 
-	ErrBucketOptionMissing = errors.New("Bucket config option missing")
+	// ErrTableMissing is returned when the table env var is empty
+	ErrTableMissing = errors.New("Table name missing")
 )
 
 const (
@@ -82,12 +82,14 @@ func New(endpoints []string, options *store.Config) (store.Store, error) {
 		return nil, ErrMultipleEndpointsUnsupported
 	}
 
-	if (options == nil) || (len(options.Bucket) == 0) {
-		return nil, ErrBucketOptionMissing
+	table = os.Getenv("AWS_DYNAMODB_TABLE")
+	if table == "" {
+		return nil, ErrTableMissing
 	}
 
-	table = options.Bucket
-	client = dynamodb.New(session.New())
+	awsConf := aws.NewConfig().
+		WithEndpoint(endpoints[0])
+	client = dynamodb.New(session.New(awsConf))
 
 	readCapacityString := os.Getenv("AWS_DYNAMODB_READ_CAPACITY")
 	if readCapacityString == "" {
@@ -124,7 +126,7 @@ func New(endpoints []string, options *store.Config) (store.Store, error) {
 	return d, nil
 }
 
-// Put mock
+//Put the key, value pair
 func (d *DynamoDB) Put(key string, value []byte, opts *store.WriteOptions) error {
 	defer metrics.MeasureSince([]string{"dynamodb", "put"}, time.Now())
 	record := DynamoDBRecord{
